@@ -2,6 +2,7 @@ package com.MindConnect.FeedService.entity;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
@@ -34,6 +35,7 @@ public class TimelineEntity {
     private Instant postCreatedAt; // CreatedAt for the post (used for time-based cursor pagination)
 
     @NotNull(message = "CreatedAt must not be null or empty")
+    @CreatedDate
     private Instant createdAt;
 
     public TimelineEntity() {}

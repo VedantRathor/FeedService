@@ -12,7 +12,7 @@ public class KafkaProducerConfig {
     @Bean
     public NewTopic feedBatchTopic() {
          return TopicBuilder.name(KafkaProducerConfig.FEED_BATCH_TOPIC)
-                .partitions(10)
+                .partitions(3)
                 .replicas(2)
                 .build();
     }

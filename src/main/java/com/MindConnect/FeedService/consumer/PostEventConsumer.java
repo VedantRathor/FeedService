@@ -1,5 +1,6 @@
 package com.MindConnect.FeedService.consumer;
 
+import com.MindConnect.FeedService.common.FeedBatchSentEvent;
 import com.MindConnect.FeedService.common.PostEvent;
 import com.MindConnect.FeedService.service.FeedBatchProducerService;
 import org.springframework.data.repository.query.ExtensionAwareQueryMethodEvaluationContextProvider;
@@ -7,12 +8,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 @Component
 public class PostEventConsumer {
@@ -33,71 +32,29 @@ public class PostEventConsumer {
             System.out.println(event.getCreatorId());
             System.out.println(event.getPostCreatedAt());
 
-//            List<Integer> followerList = new ArrayList<>();
-//            for (int i = 0; i < 5000000; i++) {
-//                followerList.add(i);
-//            }
-//            int totalFollowers = followerList.size();
-//            int threshold = 2000;
-//            int batchSize = 2000;
-//
-//            if (totalFollowers > threshold) {
-//                int numberOfThreads = 10;
-//                int loadPerThread = totalFollowers / 10;
-//                ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
-//                List<Integer> followersListIDs = new ArrayList<>();
-//                for (int i = 0; i < totalFollowers; i++) {
-//                    followersListIDs.add(i+1);
-//                }
-//
-//                long startTime = System.currentTimeMillis();
-//
-//                for (int thread = 0; thread < 10; thread++) {
-//                    int start = thread * loadPerThread;
-//                    int end = Math.min(start+loadPerThread, followerList.size());
-////                    System.out.println("start: " + start);
-////                    System.out.println("end: " + end);
-//                    executorService.submit(()-> {
-//                        int fromStart = start;
-////                        System.out.println("fromStart: " + fromStart);
-////                        System.out.println("toEND: " + fromStart + batchSize);
-//                        int batchsize = 2000;
-//                        while (true) {
-//                            if (fromStart + batchsize > end) {
-//                                int skip = fromStart;
-//                                int limit = end - fromStart;
-//                                List<Integer> filtered = followersListIDs.subList(skip, skip+limit);
-//                                for (Integer id: filtered) {  }
-//
-//                                try {
-//                                    Thread.sleep(70);
-//                                } catch (InterruptedException e) {
-//                                    throw new RuntimeException(e);
-//                                }
-//                                break;
-//                            } else {
-//                                int skip = fromStart;
-//                                int limit = batchsize;
-//                                // do db stuff
-//                                List<Integer> filtered = followersListIDs.subList(skip, skip+limit);
-//                                for (Integer id: filtered) {  }
-//
-//                                fromStart = fromStart + batchsize;
-//                                try {
-//                                    Thread.sleep(70);
-//                                } catch (InterruptedException e) {
-//                                    throw new RuntimeException(e);
-//                                }
-//                            }
-//                        }
-//                    });
-//                }
-//                executorService.shutdown();
-//                executorService.awaitTermination(10, TimeUnit.MINUTES);
-//                long endTime = System.currentTimeMillis();    // end timer
-//                System.out.println("Total time taken: " + (endTime - startTime) + " ms");
-//                System.out.println("EXITEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD");
-//            }
+
+            int times = 1000000 / 4000;
+            while (times > 0) {
+                List<String> followers = new ArrayList<>();
+                times --;
+                for (Integer user = 1; user <= 4000; user++) {
+                    String userId = user.toString() + "-uuid" + "-unique" + "-" + System.nanoTime() + "-" + UUID.randomUUID();
+                    followers.add(userId);
+                }
+
+                FeedBatchSentEvent batch = new FeedBatchSentEvent(
+                        event.getPostId(),
+                        event.getCreatorId(),
+                        event.getPostCreatedAt(),
+                        followers
+                );
+
+                feedBatchProducerService.sendFeedBatchEvent(batch);
+                System.out.println("[INFO] inserted into topic.......");
+                Thread.sleep(50);
+            }
+
+            acknowledgment.acknowledge();
 
         } catch (Exception e) {
             // log error, Spring Kafka will handle retry + DLQ
