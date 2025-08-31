@@ -83,7 +83,7 @@ public class TimelineEntity {
         return createdAt;
     }
 
-    public void setCreatedAt(Instant createdAt) {
+    public void  setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
 }

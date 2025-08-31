@@ -1,24 +1,30 @@
 package com.MindConnect.FeedService.consumer;
 
+import com.MindConnect.FeedService.client.FollowServiceClient;
 import com.MindConnect.FeedService.common.FeedBatchSentEvent;
 import com.MindConnect.FeedService.common.PostEvent;
+import com.MindConnect.FeedService.dto.FollowerResponseDTO;
+import com.MindConnect.FeedService.dto.FollowerCursorDTO;
+import com.MindConnect.FeedService.entity.TimelineEntity;
+import com.MindConnect.FeedService.repository.TimelineRepository;
 import com.MindConnect.FeedService.service.FeedBatchProducerService;
-import org.springframework.data.repository.query.ExtensionAwareQueryMethodEvaluationContextProvider;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
+
+
 
 @Component
 public class PostEventConsumer {
     private final FeedBatchProducerService feedBatchProducerService;
+    private final TimelineRepository timelineRepository;
+    private final FollowServiceClient followServiceClient;
 
-    public PostEventConsumer(FeedBatchProducerService feedBatchProducerService) {
+    public PostEventConsumer(FeedBatchProducerService feedBatchProducerService, TimelineRepository timelineRepository, FollowServiceClient followServiceClient) {
+        this.timelineRepository = timelineRepository;
         this.feedBatchProducerService = feedBatchProducerService;
+        this.followServiceClient = followServiceClient;
     }
 
     @KafkaListener(
@@ -32,37 +38,63 @@ public class PostEventConsumer {
             System.out.println(event.getCreatorId());
             System.out.println(event.getPostCreatedAt());
 
+            int threshold = 10000;
+            Long batchSize = 2000L;
+            String userId = event.getCreatorId();
 
-            int times = 1000000 / 4000;
-            while (times > 0) {
-                List<String> followers = new ArrayList<>();
-                times --;
-                for (Integer user = 1; user <= 4000; user++) {
-                    String userId = user.toString() + "-uuid" + "-unique" + "-" + System.nanoTime() + "-" + UUID.randomUUID();
-                    followers.add(userId);
+            // Get the followerCount
+            Long followerCount = followServiceClient.getFollowerCount(userId).getData();
+            System.out.println("followerCount: " + followerCount);
+
+            if (followerCount <= threshold) {
+                // Fetch all followers in one go
+                FollowerResponseDTO response = followServiceClient.getFollowers(userId, null, followerCount);
+                List<TimelineEntity> entities = response.getData().getFollowersList().stream()
+                        .map(follower -> {
+                            TimelineEntity entity = new TimelineEntity();
+                            entity.setUserId(follower.getFollowerId());
+                            entity.setPostCreatedAt(event.getPostCreatedAt());
+                            entity.setPostId(event.getPostId());
+                            entity.setAuthorId(event.getCreatorId());
+                            return entity;
+                        }).toList();
+
+                if (entities != null && !entities.isEmpty()) {
+                    this.timelineRepository.saveAll(entities);
                 }
+            } else {
+                // Cursor pagination
+                String cursor = null;
+                boolean hasNext = true;
 
-                FeedBatchSentEvent batch = new FeedBatchSentEvent(
-                        event.getPostId(),
-                        event.getCreatorId(),
-                        event.getPostCreatedAt(),
-                        followers
-                );
+                while (hasNext) {
+                    FollowerResponseDTO response = followServiceClient.getFollowers(userId, cursor, batchSize);
+                    List<FollowerCursorDTO> followers = response.getData().getFollowersList();
 
-                feedBatchProducerService.sendFeedBatchEvent(batch);
-                System.out.println("[INFO] inserted into topic.......");
-                Thread.sleep(50);
+                    if (followers != null && !followers.isEmpty()) {
+                        List<TimelineEntity> batch = followers.stream()
+                                .map(follower -> {
+                                    TimelineEntity entity = new TimelineEntity();
+                                    entity.setUserId(follower.getFollowerId());
+                                    entity.setPostCreatedAt(event.getPostCreatedAt());
+                                    entity.setPostId(event.getPostId());
+                                    entity.setAuthorId(event.getCreatorId());
+                                    return entity;
+                                }).toList();
+
+                        this.feedBatchProducerService.sendFeedBatchEvent(new FeedBatchSentEvent(batch));
+                        System.out.println("[INSERTED] into partition..." );
+                    }
+
+                    cursor = response.getData().getNextCursor();
+                    hasNext = cursor != null;
+                }
             }
 
             acknowledgment.acknowledge();
-
         } catch (Exception e) {
             // log error, Spring Kafka will handle retry + DLQ
             throw e;
         }
-    }
-
-    private static void myHeavyFunc() throws InterruptedException {
-        Thread.sleep(2000);
     }
 }

@@ -39,7 +39,7 @@ public class KafkaFeedBatchTopicConsumerConfig {
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL);
         // Manual ack mode → consumer can commit offsets after processing, avoids losing messages on failure
 
-        factory.setConcurrency(3);
+        factory.setConcurrency(6);
         factory.getContainerProperties().setPollTimeout(3000); // poll interval
         return factory;
     }
